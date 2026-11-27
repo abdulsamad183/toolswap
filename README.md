@@ -22,3 +22,5 @@ Run the scenario command twice. Both runs should print `Outcome: PASS` and the s
 See [feasibility checks](docs/feasibility.md) for the Apple Silicon model commands, [foundation decisions](docs/foundation.md) for scope and compatibility, and [foundation evidence](docs/foundation-evidence.md) for the previous batch.
 
 See the [pizza timeout examples](examples/pizza_recovery/README.md) for two mock recovery replays and a small local training exercise.
+
+See the [SQLite state safety checks](docs/state-safety.md) for the mock state store, effect evidence, and manual verification.

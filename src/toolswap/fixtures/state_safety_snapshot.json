@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "tables": {
+    "accounts": [
+      {"account_id": "mock-account-1", "status": "active", "verified": 1},
+      {"account_id": "mock-account-2", "status": "suspended", "verified": 0}
+    ],
+    "cases": [
+      {
+        "case_id": "mock-case-1",
+        "account_id": "mock-account-1",
+        "issue": "Replacement for a damaged part",
+        "status": "open",
+        "notes": "Replacement approved",
+        "replacement_approved": 1
+      },
+      {
+        "case_id": "mock-case-2",
+        "account_id": "mock-account-2",
+        "issue": "Missing accessory",
+        "status": "open",
+        "notes": "",
+        "replacement_approved": 0
+      }
+    ],
+    "inventory": [
+      {"sku": "mock-part-1", "location": "north", "available_count": 2, "reserved_count": 0},
+      {"sku": "mock-part-1", "location": "south", "available_count": 0, "reserved_count": 0},
+      {"sku": "mock-part-2", "location": "north", "available_count": 1, "reserved_count": 0}
+    ],
+    "work_orders": [],
+    "notifications": []
+  }
+}
