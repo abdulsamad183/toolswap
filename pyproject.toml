@@ -20,6 +20,12 @@ dependencies = [
 [project.scripts]
 toolswap = "toolswap.cli:main"
 
+[project.optional-dependencies]
+mlx = [
+    "huggingface-hub>=1,<2; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "mlx-lm==0.32.2; sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+
 [dependency-groups]
 dev = [
     "hypothesis>=6,<7",

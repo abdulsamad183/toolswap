@@ -1,0 +1,21 @@
+schema_version: 1.0.0
+scenario_id: service_ops.case_read
+version: 1.0.0
+initial_snapshot: sha256:96c900dc6535a52ee65115d08a0fbb981cf1d5c70bee14b336b1947802174f48
+user_task: Read the status of mock-case-1.
+policy_constraints: [Read-only mock data]
+allowed_tools:
+  - {id: cases.get, version: 1.0.0}
+assertions:
+  - schema_version: 1.0.0
+    assertion_id: case_is_open
+    kind: required
+    path: [cases, mock-case-1, status]
+    equals: open
+eligible_fault_points: []
+budgets:
+  schema_version: 1.0.0
+  retries_per_tool: 0
+  equivalent_calls: 1
+  recovery_actions: 0
+seed: 0
