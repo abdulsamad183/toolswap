@@ -1,0 +1,227 @@
+schema_version: 1.0.0
+training:
+  - id: t01
+    order: {item: "Margherita", quantity: 1, reference: pizza-42}
+    lookup: confirmed_failure
+    detail: "The order gateway rejected the request before it was queued."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: RETRY
+  - id: t02
+    order: {item: "Pepperoni", quantity: 2, reference: pizza-65}
+    lookup: confirmed_failure
+    detail: "The restaurant was temporarily unavailable and the intake server closed the attempt."
+    retries_remaining: 2
+    contract_allows_retry: true
+    expected_action: RETRY
+  - id: t03
+    order: {item: "Mushroom", quantity: 1, reference: pizza-27}
+    lookup: confirmed_failure
+    detail: "The order service rolled back the transaction before recording an order."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: RETRY
+  - id: t04
+    order: {item: "Four Cheese", quantity: 3, reference: pizza-91}
+    lookup: confirmed_failure
+    detail: "A queue outage canceled the request before any worker picked it up."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: RETRY
+  - id: t05
+    order: {item: "Veggie", quantity: 2, reference: pizza-83}
+    lookup: confirmed_failure
+    detail: "The shop rejected this attempt during a brief capacity limit and released the queue slot."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: RETRY
+  - id: t06
+    order: {item: "Hawaiian", quantity: 1, reference: pizza-39}
+    lookup: confirmed_failure
+    detail: "An internal handoff failed and the shop marked the order attempt canceled."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: RETRY
+  - id: t07
+    order: {item: "Margherita", quantity: 2, reference: pizza-24}
+    lookup: confirmed_failure
+    detail: "An expired session ended the attempt before the restaurant accepted the order."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: RETRY
+  - id: t08
+    order: {item: "BBQ Chicken", quantity: 1, reference: pizza-57}
+    lookup: confirmed_failure
+    detail: "The reservation check rejected the submission and finalized the attempt."
+    retries_remaining: 2
+    contract_allows_retry: true
+    expected_action: RETRY
+  - id: t09
+    order: {item: "Pepperoni", quantity: 3, reference: pizza-76}
+    lookup: confirmed_failure
+    detail: "The printer gateway rejected the submission before the order was recorded."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: RETRY
+  - id: t10
+    order: {item: "Mushroom", quantity: 2, reference: pizza-53}
+    lookup: confirmed_failure
+    detail: "A failed processing lease closed the attempt and the server discarded its work."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: RETRY
+  - id: t11
+    order: {item: "Veggie", quantity: 1, reference: pizza-49}
+    lookup: confirmed_failure
+    detail: "The shop recorded a terminal intake error before accepting the basket."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: RETRY
+  - id: t12
+    order: {item: "Four Cheese", quantity: 2, reference: pizza-32}
+    lookup: confirmed_failure
+    detail: "The order service aborted and confirmed the rollback of the first attempt."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: RETRY
+  - id: t13
+    order: {item: "Margherita", quantity: 1, reference: pizza-56}
+    lookup: timeout
+    detail: "The status request returned no response before the deadline."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: STOP
+  - id: t14
+    order: {item: "Pepperoni", quantity: 2, reference: pizza-85}
+    lookup: pending
+    detail: "The shop is still processing the original order attempt."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: STOP
+  - id: t15
+    order: {item: "Mushroom", quantity: 1, reference: pizza-67}
+    lookup: not_found
+    detail: "The lookup found no matching reference and provided no final status."
+    retries_remaining: 2
+    contract_allows_retry: true
+    expected_action: STOP
+  - id: t16
+    order: {item: "Four Cheese", quantity: 2, reference: pizza-54}
+    lookup: unavailable
+    detail: "The status service returned a service-unavailable error."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: STOP
+  - id: t17
+    order: {item: "Veggie", quantity: 3, reference: pizza-34}
+    lookup: unverified_final
+    detail: "The lookup reports a final error code without stating whether an order was already created."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: STOP
+  - id: t18
+    order: {item: "Hawaiian", quantity: 1, reference: pizza-63}
+    lookup: provisional_failure
+    detail: "The queue reports an error and may still deliver the original request."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: STOP
+  - id: t19
+    order: {item: "BBQ Chicken", quantity: 2, reference: pizza-22}
+    lookup: partial
+    detail: "The shop found an order stub and settlement is in progress."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: STOP
+  - id: t20
+    order: {item: "Margherita", quantity: 3, reference: pizza-71}
+    lookup: stale
+    detail: "The read replica has not caught up with the order service."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: STOP
+  - id: t21
+    order: {item: "Pepperoni", quantity: 1, reference: pizza-45}
+    lookup: confirmed_failure
+    detail: "The order attempt is closed after a temporary intake outage."
+    retries_remaining: 0
+    contract_allows_retry: true
+    expected_action: STOP
+  - id: t22
+    order: {item: "Mushroom", quantity: 2, reference: pizza-69}
+    lookup: confirmed_failure
+    detail: "The first attempt was canceled and the shop froze ordering for this request."
+    retries_remaining: 1
+    contract_allows_retry: false
+    expected_action: STOP
+  - id: t23
+    order: {item: "Veggie", quantity: 1, reference: pizza-81}
+    lookup: timeout
+    detail: "The read deadline expired while the status request was waiting for a response."
+    retries_remaining: 2
+    contract_allows_retry: true
+    expected_action: STOP
+  - id: t24
+    order: {item: "Four Cheese", quantity: 3, reference: pizza-95}
+    lookup: confirmed_failure
+    detail: "The server definitively dropped the request before committing an order."
+    retries_remaining: 0
+    contract_allows_retry: true
+    expected_action: STOP
+held_out:
+  - id: h01
+    order: {item: "Spinach", quantity: 2, reference: pizza-107}
+    lookup: confirmed_failure
+    detail: "The shop's intake circuit breaker ended this submission before it could create an order."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: RETRY
+  - id: h02
+    order: {item: "Pesto", quantity: 1, reference: pizza-118}
+    lookup: confirmed_failure
+    detail: "A validation service restart caused an irreversible cancellation of the original attempt."
+    retries_remaining: 2
+    contract_allows_retry: true
+    expected_action: RETRY
+  - id: h03
+    order: {item: "Margherita", quantity: 3, reference: pizza-131}
+    lookup: confirmed_failure
+    detail: "The store closed the attempt after its kitchen-slot provider rejected the first request."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: RETRY
+  - id: h04
+    order: {item: "Artichoke", quantity: 2, reference: pizza-146}
+    lookup: confirmed_failure
+    detail: "A storage acknowledgment failed and the primary server confirmed a completed rollback."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: RETRY
+  - id: h05
+    order: {item: "Pepperoni", quantity: 3, reference: pizza-162}
+    lookup: timeout
+    detail: "The shop status request timed out during a connectivity interruption."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: STOP
+  - id: h06
+    order: {item: "Pesto", quantity: 2, reference: pizza-178}
+    lookup: pending
+    detail: "The original request is waiting for a delivery-slot confirmation."
+    retries_remaining: 2
+    contract_allows_retry: true
+    expected_action: STOP
+  - id: h07
+    order: {item: "Spinach", quantity: 1, reference: pizza-184}
+    lookup: unverified_final
+    detail: "The response says FAILED_FINAL but omits the committed-order and late-completion fields."
+    retries_remaining: 1
+    contract_allows_retry: true
+    expected_action: STOP
+  - id: h08
+    order: {item: "Artichoke", quantity: 3, reference: pizza-199}
+    lookup: confirmed_failure
+    detail: "The shop closed the original attempt after its order display system rejected the request."
+    retries_remaining: 0
+    contract_allows_retry: true
+    expected_action: STOP
