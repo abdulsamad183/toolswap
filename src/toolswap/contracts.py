@@ -1,13 +1,13 @@
 """Versioned data exchanged between the runtime and artifact readers."""
 
 from enum import StrEnum
-from typing import Annotated, Literal, Self
+from typing import Annotated, Final, Literal, Self
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, StringConstraints, model_validator
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION: Final = "1.0.0"
 Identifier = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_.-]{0,127}$")]
 Version = Annotated[str, StringConstraints(pattern=r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")]
 ContentHash = Annotated[str, StringConstraints(pattern=r"^sha256:[a-f0-9]{64}$")]
