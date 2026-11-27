@@ -1,0 +1,109 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2908
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\froman\fcharset0 Times-Bold;\f1\froman\fcharset0 Times-Roman;\f2\fmodern\fcharset0 Courier;
+}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;}
+{\*\listtable{\list\listtemplateid1\listhybrid{\listlevel\levelnfc0\levelnfcn0\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{decimal\}}{\leveltext\leveltemplateid1\'01\'00;}{\levelnumbers\'01;}\fi-360\li720\lin720 }{\listname ;}\listid1}
+{\list\listtemplateid2\listhybrid{\listlevel\levelnfc0\levelnfcn0\leveljc0\leveljcn0\levelfollow0\levelstartat4\levelspace360\levelindent0{\*\levelmarker \{decimal\}}{\leveltext\leveltemplateid101\'01\'00;}{\levelnumbers\'01;}\fi-360\li720\lin720 }{\listname ;}\listid2}}
+{\*\listoverridetable{\listoverride\listid1\listoverridecount0\ls1}{\listoverride\listid2\listoverridecount0\ls2}}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\sa298\partightenfactor0
+
+\f0\b\fs36 \cf0 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 Real-life example: Customer support refund agent\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\b0\fs24 \cf0 An e-commerce company has an AI customer-support agent. A customer says:\
+\pard\pardeftab720\sa240\partightenfactor0
+\cf0 \'93My order was cancelled. Please refund \uc0\u8377 2,000.\'94\
+The agent calls the company\'92s payment API:\
+\pard\pardeftab720\partightenfactor0
+
+\f2\fs26 \cf0 POST /refund\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\fs24 \cf0 The payment system processes the refund, but the API response times out.\
+Now the AI agent does not know whether the refund happened.\
+\pard\pardeftab720\sa280\partightenfactor0
+
+\f0\b\fs28 \cf0 Without ToolSwap\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\b0\fs24 \cf0 The agent retries the refund request.\
+The customer may receive two refunds, costing the company \uc0\u8377 4,000.\
+\pard\pardeftab720\sa280\partightenfactor0
+
+\f0\b\fs28 \cf0 With ToolSwap\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\b0\fs24 \cf0 The company places ToolSwap between the AI agent and its APIs.\
+\pard\pardeftab720\partightenfactor0
+
+\f2\fs26 \cf0 Customer request\
+      \uc0\u8595 \
+AI support agent\
+      \uc0\u8595 \
+Payment API\
+      \uc0\u8595 \
+ToolSwap recovery system\
+      \uc0\u8595 \
+Safe next action\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\fs24 \cf0 When the timeout occurs:\
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls1\ilvl0\cf0 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	1	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 ToolSwap receives the failed API response.\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	2	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 It checks the tool contract and sees that refunds create financial side effects.\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	3	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 The recovery LLM recommends:\
+\pard\pardeftab720\partightenfactor0
+
+\f2\fs26 \cf0 \{\
+  "action": "VERIFY",\
+  "tool": "payments.get_refund_status",\
+  "reason": "The refund may have completed before the timeout"\
+\}\
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls2\ilvl0
+\f1\fs24 \cf0 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	4	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 The safety controller blocks another refund attempt.\
+\ls2\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	5	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 ToolSwap calls the refund-status API using the transaction or idempotency key.\
+\ls2\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	6	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 The status API confirms that the refund already succeeded.\
+\ls2\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	7	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 The agent tells the customer:\
+\pard\pardeftab720\sa240\partightenfactor0
+\cf0 \'93Your \uc0\u8377 2,000 refund has been processed.\'94\
+No duplicate refund is created.\
+\pard\pardeftab720\sa298\partightenfactor0
+
+\f0\b\fs36 \cf0 How a company integrates it\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\b0\fs24 \cf0 The company connects ToolSwap to its agent as recovery middleware:\
+\pard\pardeftab720\partightenfactor0
+
+\f2\fs26 \cf0 Agent calls tool\
+      \uc0\u8595 \
+Tool succeeds \uc0\u8594  continue normally\
+      \uc0\u8595 \
+Tool fails or result is uncertain\
+      \uc0\u8595 \
+Send task, tool contract, error and history to ToolSwap\
+      \uc0\u8595 \
+ToolSwap recommends VERIFY, RETRY, SWITCH or STOP\
+      \uc0\u8595 \
+Safety controller approves or blocks the action\
+      \uc0\u8595 \
+Agent continues safely\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\fs24 \cf0 ToolSwap does not replace the company\'92s AI agent or APIs. It adds a reliability layer around them.\
+The practical benefit is:\
+\pard\pardeftab720\sa240\partightenfactor0
+\cf0 Companies can use ToolSwap to prevent AI agents from blindly retrying failed operations, causing duplicate transactions, using unsafe fallback tools, or claiming that a task succeeded without proof.\
+}
