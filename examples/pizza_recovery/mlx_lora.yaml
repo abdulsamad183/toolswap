@@ -1,0 +1,20 @@
+model: models/feasibility/4b/1cfa9a7208912126459214e8b04321603b3df60c
+data: artifacts/pizza-recovery/dataset/train
+train: true
+fine_tune_type: lora
+mask_prompt: true
+seed: 0
+optimizer: adam
+learning_rate: 0.0001
+iters: 72
+batch_size: 1
+grad_accumulation_steps: 1
+max_seq_length: 2048
+steps_per_report: 1
+num_layers: 4
+adapter_path: artifacts/pizza-recovery/adapter-expanded
+lora_parameters:
+  rank: 8
+  scale: 20.0
+  dropout: 0.0
+  keys: [self_attn.q_proj, self_attn.v_proj]

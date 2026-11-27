@@ -20,3 +20,5 @@ bash scripts/check.sh
 Run the scenario command twice. Both runs should print `Outcome: PASS` and the same state and trace hashes. The printed artifact directory contains the tool result and stub proposal in `trace.jsonl` and the evaluator's assertion in `metrics.json`.
 
 See [feasibility checks](docs/feasibility.md) for the Apple Silicon model commands, [foundation decisions](docs/foundation.md) for scope and compatibility, and [foundation evidence](docs/foundation-evidence.md) for the previous batch.
+
+See the [pizza timeout examples](examples/pizza_recovery/README.md) for two mock recovery replays and a small local training exercise.

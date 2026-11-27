@@ -1,0 +1,23 @@
+schema_version: 1.0.0
+request: {item: Margherita, quantity: 1, reference: pizza-42}
+cases:
+  - scenario_id: pizza_002
+    first_attempt_order_id: null
+    status_lookup_times_out: false
+    retry_order_id: P-732
+    ground_truth:
+      actions: [VERIFY, RETRY]
+      place_order_calls: 2
+      final_orders:
+        - {order_id: P-732, item: Margherita, quantity: 1, reference: pizza-42}
+      reported_status: CONFIRMED
+  - scenario_id: pizza_003
+    first_attempt_order_id: P-731
+    status_lookup_times_out: true
+    retry_order_id: P-732
+    ground_truth:
+      actions: [VERIFY, STOP]
+      place_order_calls: 1
+      final_orders:
+        - {order_id: P-731, item: Margherita, quantity: 1, reference: pizza-42}
+      reported_status: UNCONFIRMED
