@@ -18,6 +18,19 @@ Preparation downloads roughly 12 GB from the two pinned public Qwen snapshots an
 
 The report path printed by `check` contains the selected model, repeated inference results, per-stage MLX peak memory in bytes, and one-step training and adapter reload evidence for the selected candidate. Training uses a single purpose-built sample and measures compatibility. The report and adapter stay under the ignored `artifacts/model-feasibility/` directory. The 28 GB limit is applied to the reported MLX allocator peak of each checked stage.
 
+## Verified result
+
+The local Apple M3 Pro run selected Qwen3-4B. Its two base outputs matched and passed the strict decision parser. One optimizer update produced a finite training loss of `0.0500115864`, and a fresh process loaded the same adapter checksum and returned a schema-valid decision. Qwen3-1.7B also returned matching, schema-valid base outputs and remains the fallback.
+
+| Check | Peak MLX memory |
+| --- | ---: |
+| 4B base inference | 2.60 GB |
+| 4B one-step training | 2.70 GB |
+| 4B adapter reload and inference | 2.61 GB |
+| 1.7B base inference | 1.31 GB |
+
+Two independent read-only runs passed the case-status assertion and produced matching state and trace hashes. The portable suite passed all 81 tests in a clean environment with the MLX extra absent. The installed wheel also replayed the scenario from outside the checkout.
+
 ## Tracker evidence
 
 | Task | Acceptance evidence |
