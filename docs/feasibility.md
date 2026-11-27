@@ -16,6 +16,8 @@ uv run --locked --extra mlx python scripts/model_spike.py check
 
 Preparation downloads roughly 12 GB from the two pinned public Qwen snapshots and quantizes them locally. Use `prepare --candidate 4b` or `prepare --candidate 1.7b` to prepare them individually. Prepared checkpoints are reused when their recorded identity and tokenizer metadata match. Checkpoints live under `models/feasibility/`. The check uses the prepared files in offline worker processes.
 
+When training starts, the terminal prints the model and tokenizer revisions, quantization, optimizer, learning rate, seed, batch size, and LoRA settings. Look for `Step 1/1` as it runs the forward pass and updates the adapter. The output shows the loss, elapsed time, peak MLX memory, and saved adapter path before the reload check.
+
 The report path printed by `check` contains the selected model, repeated inference results, per-stage MLX peak memory in bytes, and one-step training and adapter reload evidence for the selected candidate. Training uses a single purpose-built sample and measures compatibility. The report and adapter stay under the ignored `artifacts/model-feasibility/` directory. The 28 GB limit is applied to the reported MLX allocator peak of each checked stage.
 
 ## Verified result

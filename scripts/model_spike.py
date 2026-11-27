@@ -31,6 +31,7 @@ SEED = 0
 MAX_SEQUENCE = 2048
 MAX_OUTPUT = 256
 LEARNING_RATE = 1e-4
+TRAINING_STEPS = 1
 ADAPTER_CONFIG = {
     "fine_tune_type": "lora",
     "num_layers": 4,
@@ -40,6 +41,20 @@ ADAPTER_CONFIG = {
         "dropout": 0.0,
         "keys": ["self_attn.q_proj", "self_attn.v_proj"],
     },
+}
+SETTINGS = {
+    "seed": SEED,
+    "thinking": False,
+    "temperature": 0,
+    "max_sequence_length": MAX_SEQUENCE,
+    "max_output_tokens": MAX_OUTPUT,
+    "learning_rate": LEARNING_RATE,
+    "optimizer": "Adam",
+    "optimizer_updates": TRAINING_STEPS,
+    "batch_size": 1,
+    "gradient_accumulation_steps": 1,
+    "completion_only_loss": True,
+    "adapter": ADAPTER_CONFIG,
 }
 DECISION = canonical_json(
     {
@@ -87,6 +102,27 @@ def _identity(candidate: str) -> dict:
         "mlx_lm_version": RELEASE,
         "quantization": QUANTIZATION,
     }
+
+
+def _print_training_config(candidate: str) -> None:
+    identity = _identity(candidate)
+    quant = identity["quantization"]
+    lora = SETTINGS["adapter"]["lora_parameters"]
+    print(
+        f"Training configuration for {identity['repository']}\n"
+        f"  Model revision: {identity['model_revision']}\n"
+        f"  Tokenizer revision: {identity['tokenizer_revision']}\n"
+        f"  Quantization: {quant['bits']}-bit {quant['mode']}, group size {quant['group_size']}\n"
+        f"  Optimizer: {SETTINGS['optimizer']} | Learning rate: {SETTINGS['learning_rate']:g}"
+        f" | Seed: {SETTINGS['seed']}\n"
+        f"  Steps: {SETTINGS['optimizer_updates']} | Batch size: {SETTINGS['batch_size']}"
+        f" | Gradient accumulation: {SETTINGS['gradient_accumulation_steps']}\n"
+        f"  LoRA rank: {lora['rank']} | Scale: {lora['scale']:g} | Dropout: {lora['dropout']:g}"
+        f" | Last {SETTINGS['adapter']['num_layers']} layers\n"
+        f"  LoRA targets: {', '.join(lora['keys'])}\n"
+        f"  Max sequence: {SETTINGS['max_sequence_length']} tokens | Loss: completion only",
+        flush=True,
+    )
 
 
 def _json(path: Path, payload: dict) -> None:
@@ -176,6 +212,9 @@ def _train(model, tokenizer, prompt: list[int], directory: Path) -> dict:
     response = tokenizer.encode(DECISION, add_special_tokens=False) + [tokenizer.eos_token_id]
     if len(prompt) + len(response) > MAX_SEQUENCE:
         raise RuntimeError("The untruncated training example exceeds the configured context.")
+    print(
+        f"[train] Example: {len(prompt)} prompt tokens, {len(response)} response tokens", flush=True
+    )
     tokens = mx.array([prompt + response])
     model.freeze()
     linear_to_lora_layers(model, ADAPTER_CONFIG["num_layers"], ADAPTER_CONFIG["lora_parameters"])
@@ -190,28 +229,42 @@ def _train(model, tokenizer, prompt: list[int], directory: Path) -> dict:
         logits = model(tokens[:, :-1])[:, len(prompt) - 1 :, :].astype(mx.float32)
         return nn.losses.cross_entropy(logits, tokens[:, len(prompt) :]).mean()
 
+    step = f"[train] Step 1/{TRAINING_STEPS}"
+    step_started = perf_counter()
+    print(f"{step}: running forward pass", flush=True)
     loss, gradients = nn.value_and_grad(model, completion_loss)(model, tokens)
     mx.eval(loss)
-    if not math.isfinite(loss.item()):
+    loss_value = loss.item()
+    if not math.isfinite(loss_value):
         raise RuntimeError("The one-step training loss is nonfinite.")
+    print(
+        f"{step}: loss={loss_value:.6f} | computing gradients and updating LoRA weights", flush=True
+    )
     optimizer.update(model, gradients)
     weights = dict(tree_flatten(model.trainable_parameters()))
     mx.eval(weights, optimizer.state)
-    if optimizer.state["step"].item() != 1 or not any(
+    updates = optimizer.state["step"].item()
+    if updates != TRAINING_STEPS or not any(
         (weights[name] != value).any().item() for name, value in parameters.items()
     ):
         raise RuntimeError("The optimizer did not change the adapter in exactly one step.")
     if not all(mx.isfinite(value).all().item() for value in weights.values()):
         raise RuntimeError("The updated adapter contains nonfinite values.")
+    print(
+        f"{step} complete in {perf_counter() - step_started:.2f}s"
+        f" | Peak MLX memory: {mx.get_peak_memory() / 1e9:.2f} GB",
+        flush=True,
+    )
 
     directory.mkdir()
     _json(directory / "adapter_config.json", ADAPTER_CONFIG)
     weights_path = directory / "adapters.safetensors"
     mx.save_safetensors(str(weights_path), weights)
+    print(f"[train] Adapter saved: {weights_path}", flush=True)
     return {
-        "optimizer_updates": 1,
+        "optimizer_updates": updates,
         "completion_tokens": len(response),
-        "loss": loss.item(),
+        "loss": loss_value,
         "adapter_hash": content_hash(weights_path.read_bytes()),
         "adapter_config_hash": content_hash((directory / "adapter_config.json").read_bytes()),
     }
@@ -286,6 +339,8 @@ def _worker(candidate: str, stage: str, destination: Path) -> None:
 
 def _run_worker(candidate: str, stage: str, destination: Path) -> dict:
     print(f"Checking {candidate}: {stage}", flush=True)
+    if stage == "train":
+        _print_training_config(candidate)
     result = subprocess.run(
         [sys.executable, __file__, "_worker", "--candidate", candidate, stage, str(destination)],
         env=os.environ | {"HF_HUB_OFFLINE": "1", "HF_HUB_DISABLE_TELEMETRY": "1"},
@@ -345,20 +400,7 @@ def check() -> int:
         "schema_version": "1.0.0",
         "selected_candidate": selected,
         "memory_limit_bytes": MEMORY_LIMIT,
-        "settings": {
-            "seed": SEED,
-            "thinking": False,
-            "temperature": 0,
-            "max_sequence_length": MAX_SEQUENCE,
-            "max_output_tokens": MAX_OUTPUT,
-            "learning_rate": LEARNING_RATE,
-            "optimizer": "Adam",
-            "optimizer_updates": 1,
-            "batch_size": 1,
-            "gradient_accumulation_steps": 1,
-            "completion_only_loss": True,
-            "adapter": ADAPTER_CONFIG,
-        },
+        "settings": SETTINGS,
         "runtime": {
             "python": platform.python_version(),
             "mlx": version("mlx"),
