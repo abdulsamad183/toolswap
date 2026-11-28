@@ -64,6 +64,16 @@ def _contract(
     )
 
 
+def revised_case_update(contract: ToolContract) -> ToolContract:
+    """The case-note rename used by the bundled recovery preview."""
+    return contract.model_copy(
+        update={
+            "version": "2.0.0",
+            "input_schema": _object(case_id=IDENTIFIER, expected_notes=TEXT, new_notes=TEXT),
+        }
+    )
+
+
 def service_contracts(fixtures: Path) -> tuple[ToolContract, ...]:
     try:
         legacy_case = parse_yaml_record(fixtures / "cases_get.yaml", ToolContract)
