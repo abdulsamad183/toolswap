@@ -24,3 +24,5 @@ See [feasibility checks](docs/feasibility.md) for the Apple Silicon model comman
 See the [pizza timeout examples](examples/pizza_recovery/README.md) for two mock recovery replays and a small local training exercise.
 
 See the [SQLite state safety checks](docs/state-safety.md) for the mock state store, effect evidence, and manual verification.
+
+See the [SQLite service tool checks](docs/service-tools.md) for replacement order, stock, and delivery verification.
