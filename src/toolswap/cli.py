@@ -1,5 +1,6 @@
 """Commands for the local ToolSwap CLI."""
 
+import re
 import sqlite3
 from pathlib import Path
 from typing import Annotated
@@ -10,6 +11,7 @@ from pydantic import ValidationError
 from toolswap.config import InputError, parse_yaml_record, resolve_config, validation_summary
 from toolswap.contracts import ToolContract
 from toolswap.determinism import canonical_json
+from toolswap.recovery.evidence import verify_bundle
 from toolswap.replay import ArtifactError
 from toolswap.scenario import run_scenario
 
@@ -19,9 +21,11 @@ app = typer.Typer(
 config_app = typer.Typer(help="Resolve run configuration.")
 contract_app = typer.Typer(help="Validate versioned tool contracts.")
 scenario_app = typer.Typer(help="Run a local mock scenario.")
+trace_app = typer.Typer(help="Inspect local recovery evidence.")
 app.add_typer(config_app, name="config")
 app.add_typer(contract_app, name="contract")
 app.add_typer(scenario_app, name="scenario")
+app.add_typer(trace_app, name="trace")
 
 
 def _failure(error: InputError | ValidationError | OSError) -> typer.Exit:
@@ -68,12 +72,35 @@ def scenario_run(manifest: Annotated[Path, typer.Option("--manifest")]) -> None:
         raise typer.Exit(3) from None
     except (InputError, ValidationError, OSError) as exc:
         raise _failure(exc) from None
-    typer.echo(f"Outcome: {'PASS' if result.passed else 'FAIL'}")
+    outcome = "ERROR" if result.infrastructure_failure else "PASS" if result.passed else "FAIL"
+    typer.echo(f"Outcome: {outcome}")
     typer.echo(f"Artifacts: {result.run_dir.relative_to(root.resolve())}")
     typer.echo(f"State hash: {result.state_hash}")
     typer.echo(f"Trace hash: {result.trace_hash}")
+    if result.infrastructure_failure:
+        raise typer.Exit(3)
     if not result.passed:
         raise typer.Exit(1)
+
+
+@trace_app.command("verify")
+def trace_verify(
+    run_dir: Annotated[Path, typer.Option("--run-dir")],
+    expected_trace_hash: Annotated[str | None, typer.Option("--expected-trace-hash")] = None,
+) -> None:
+    """Validate a sealed recovery bundle offline."""
+    if expected_trace_hash is not None and not re.fullmatch(
+        r"sha256:[0-9a-f]{64}", expected_trace_hash
+    ):
+        typer.echo("Expected a sha256: digest with 64 lowercase hexadecimal digits.", err=True)
+        raise typer.Exit(2)
+    try:
+        digest = verify_bundle(run_dir, expected_trace_hash)
+    except OSError as exc:
+        reason = str(exc) if isinstance(exc, ArtifactError) else type(exc).__name__
+        typer.echo(f"Artifact integrity error: {reason}", err=True)
+        raise typer.Exit(3) from None
+    typer.echo(f"Integrity: PASS\nTrace hash: {digest}")
 
 
 def main() -> None:

@@ -1,5 +1,6 @@
 """Contract-checked dispatch and separation of visible results from effect evidence."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from time import perf_counter_ns
 from typing import Literal
@@ -38,6 +39,7 @@ class Gateway:
         *,
         request_key: str | None = None,
         timeout: Timeout | None = None,
+        record_call: Callable[[str, ToolCall, str], None] | None = None,
     ) -> Dispatch:
         contract = self.registry.contract(tool)
         call = ToolCall(
@@ -48,6 +50,8 @@ class Gateway:
         )
         self.sequence += 1
         before = self.store.current_state().state_hash
+        if record_call is not None:
+            record_call("tool_attempt", call, before)
         actual = None
         observation = None
         error: JsonObject | None = None
@@ -59,6 +63,8 @@ class Gateway:
             timeout = None
         else:
             if timeout != "before":
+                if record_call is not None:
+                    record_call("tool_dispatch", call, before)
                 actual = self.registry.invoke(self.store, tool, arguments, request_key=request_key)
                 observation, error = actual.observation, actual.error
             if timeout == "before" or (timeout == "after" and error is None):

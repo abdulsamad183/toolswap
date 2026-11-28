@@ -17,6 +17,26 @@ from toolswap.contracts import (
 type Severity = Literal["none", "reversible", "consequential"]
 type VerificationStatus = Literal["verified", "not_applied", "inconclusive"]
 type FaultPoint = Literal["initial_before", "initial_after", "verification_before"]
+type TerminationKind = Literal[
+    "completed",
+    "policy_stop",
+    "budget_exhausted",
+    "blocked",
+    "information_required",
+    "confirmation_required",
+    "unresolved",
+    "infrastructure_failure",
+]
+
+
+class Termination(VersionedRecord):
+    schema_version: Literal["1.0.0"] = SCHEMA_VERSION
+    kind: TerminationKind
+    reason: Identifier
+    unresolved_step: Count | None
+    tool: Reference | None
+    last_evidence_event_id: Identifier
+    state_hash: ContentHash
 
 
 class ToolCall(VersionedRecord):
