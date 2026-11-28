@@ -23,8 +23,16 @@ def test_two_independent_runs_have_identical_artifacts(tmp_path: Path) -> None:
     results = [scenario.run_scenario(MANIFEST, root) for root in roots]
     first, second = results
     assert first.passed and second.passed
-    assert first.state_hash == second.state_hash
-    assert first.trace_hash == second.trace_hash
+    assert (
+        first.state_hash
+        == second.state_hash
+        == ("sha256:96c900dc6535a52ee65115d08a0fbb981cf1d5c70bee14b336b1947802174f48")
+    )
+    assert (
+        first.trace_hash
+        == second.trace_hash
+        == ("sha256:0e41cfd7ff5eab0b2def21fa697e50a26b67fb835026308903d9c7567e78237a")
+    )
     for path in first.run_dir.rglob("*"):
         if path.is_file():
             assert (

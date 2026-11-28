@@ -1,0 +1,6 @@
+schema_version: 1.0.0
+scenario:
+  id: service_ops.inspection
+  version: 1.0.0
+policy: oracle
+seed: 0

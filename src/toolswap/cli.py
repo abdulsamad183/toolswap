@@ -1,5 +1,6 @@
-"""Foundation commands for the local ToolSwap CLI."""
+"""Commands for the local ToolSwap CLI."""
 
+import sqlite3
 from pathlib import Path
 from typing import Annotated
 
@@ -9,7 +10,8 @@ from pydantic import ValidationError
 from toolswap.config import InputError, parse_yaml_record, resolve_config, validation_summary
 from toolswap.contracts import ToolContract
 from toolswap.determinism import canonical_json
-from toolswap.scenario import ArtifactError, run_scenario
+from toolswap.replay import ArtifactError
+from toolswap.scenario import run_scenario
 
 app = typer.Typer(
     help="Local reliability benchmark for stateful tool failures.", add_completion=False
@@ -54,12 +56,15 @@ def contract_validate(path: Path) -> None:
 
 @scenario_app.command("run")
 def scenario_run(manifest: Annotated[Path, typer.Option("--manifest")]) -> None:
-    """Run the bundled read-only case and write replay evidence."""
+    """Run a bundled scenario and write replay evidence."""
     root = Path.cwd()
     try:
         result = run_scenario(manifest, root)
     except ArtifactError as exc:
         typer.echo(f"Artifact integrity error: {exc}", err=True)
+        raise typer.Exit(3) from None
+    except sqlite3.Error as exc:
+        typer.echo(f"SQLite infrastructure failure ({type(exc).__name__}).", err=True)
         raise typer.Exit(3) from None
     except (InputError, ValidationError, OSError) as exc:
         raise _failure(exc) from None
