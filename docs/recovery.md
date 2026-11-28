@@ -1,8 +1,8 @@
-# Recovery controller previews
+# Recovery benchmark
 
 The recovery runner starts each bundled scenario in a fresh SQLite database. The gateway gives the policy the visible tool reply. The controller uses the scenario's pinned tool versions, budgets, scope, and trusted evidence to decide whether a proposal can run. The verifier checks the tool response and SQLite state before the workflow advances.
 
-## Run the previews
+## Run the M2 and M3 cases
 
 Run from the repository root:
 
@@ -13,19 +13,27 @@ uv run --locked toolswap scenario run --manifest examples/recovery/schema-repair
 uv run --locked toolswap scenario run --manifest examples/recovery/unknown-case-repair.yaml
 ```
 
-| Preview | CLI outcome | Evidence |
+| Case | CLI outcome | Evidence |
 | --- | --- | --- |
 | Committed timeout | `PASS`, exit 0 | A create commits, the policy sees a timeout, and a lookup by the original key verifies the order before `ACCEPT`. There is one create dispatch and exactly one order, one reservation, and one delivery. |
 | Unresolved timeout | `FAIL`, exit 1 | The lookup times out. The response reason is `verification_inconclusive`. The committed order is preserved, and reservation and notification are pending. |
 | Schema repair | `PASS`, exit 0 | The old `notes` field fails validation before dispatch. The repaired call uses `new_notes` and the verified previous note. One update commits and a case read verifies it. |
 | Invented case ID | `FAIL`, exit 1 | The guard reports `argument_without_provenance` for `case_id`. The ledger is empty and the final hash equals the initial hash. |
 
-The two failing previews test that the controller stops safely. Repeat a command to compare its printed hashes. The artifact directory holds the resolved manifest, trace, effect ledger, snapshots, final response, and grading evidence. The trace includes the policy's visible input, the guard's rule and evidence, and the verifier's finding. Elapsed times are captured during dispatch and stay outside the canonical evidence.
+The two cases that return exit 1 test that the controller stops safely. Repeat a command to compare its printed hashes. The artifact directory holds the resolved manifest, trace, effect ledger, snapshots, final response, grading evidence, termination record, and integrity seal. Elapsed times stay outside the canonical evidence.
+
+Set `RUN_DIR` to the path printed on the `Artifacts` line and check the bundle offline.
+
+```sh
+uv run --locked toolswap trace verify --run-dir "$RUN_DIR"
+```
+
+An intact bundle prints `Integrity: PASS`, including a bundle from a safe stop. To check against a reviewed trace hash, add `--expected-trace-hash` with the digest from the [Workflow 1 gate report](workflow-1-gate.md). The seal checks the contents of a local bundle. The reviewed digest gives you an independent reference when checking a copy.
 
 ## Verify the batch
 
 ```sh
-uv run --locked pytest -q tests/test_recovery_controller.py tests/test_recovery_previews.py
+uv run --locked pytest -q tests/test_recovery_controller.py tests/test_recovery_previews.py tests/test_recovery_evidence.py tests/test_recovery_evaluation.py
 bash scripts/check.sh
 ```
 
@@ -44,4 +52,4 @@ bash scripts/check.sh
 | P2-11 | The verifier checks the pinned result, matching effect record, and SQLite row. Contradictory results and missing evidence fail. |
 | P2-12 | The original key verifies the committed order before continuation. An inconclusive lookup prevents dependent writes. |
 
-The tracker closes the formal M2 and M3 gates at P2-18 and P2-19, after the remaining trace, termination, evaluator, and security tasks.
+The [Workflow 1 gate report](workflow-1-gate.md) covers P2-13 through P2-20 and pins the formal M2 and M3 results.

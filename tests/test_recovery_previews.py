@@ -6,9 +6,11 @@ from typer.testing import CliRunner
 
 from toolswap.cli import app
 from toolswap.contracts import EffectRecord, Event, MetricReport, Reference
-from toolswap.recovery.records import Fault, Observation
+from toolswap.recovery.evidence import verify_bundle
+from toolswap.recovery.records import Fault, Observation, Termination, ToolCall
 from toolswap.recovery.scenarios import PREVIEWS
 from toolswap.scenario import run_scenario
+from toolswap.service_tools import ToolRegistry
 from toolswap.state import StateStore
 
 EXAMPLES = Path("examples/recovery").resolve()
@@ -40,16 +42,54 @@ def _calls(events):
     ]
 
 
+def _dispatched(events):
+    return [
+        ToolCall.model_validate(event.payload["call"])
+        for event in events
+        if event.event_type == "tool_dispatch"
+    ]
+
+
 @pytest.mark.parametrize(
-    ("name", "exit_code"),
+    ("name", "exit_code", "state_hash", "trace_hash"),
     [
-        ("committed-timeout", 0),
-        ("unresolved-timeout", 1),
-        ("schema-repair", 0),
-        ("unknown-case-repair", 1),
+        (
+            "committed-timeout",
+            0,
+            "45553771dd751776c18dbc8fdebe512ec8bd576a38666193433cb028e7e17e39",
+            "3dff0e21f1c57ed218b53a487ddaad3ffc691eac0d3b460718279d947874de04",
+        ),
+        (
+            "unresolved-timeout",
+            1,
+            "54669147ac79fb43290e97467fb0cc595f7ddc1f0884f92fb3f4fa3f0818dd77",
+            "77a8acedcb828832a6d475256be19e8f5576c9cba1d1128e0fea26a54d6da554",
+        ),
+        (
+            "schema-repair",
+            0,
+            "03ede11132039d5ffd2cc1f31547b55eabe312c1240c030d9e38d406c8fa6797",
+            "403db9926f8a2ce7c03391fffed7f89d22a915ac3e99c8307760e78f064e46ab",
+        ),
+        (
+            "unknown-case-repair",
+            1,
+            INITIAL.removeprefix("sha256:"),
+            "da0cf0773751903f57237a36ea8de548727f63dbcb193fd484ae454da85f6eeb",
+        ),
     ],
 )
-def test_preview_cli_replays_deterministically(tmp_path, monkeypatch, name, exit_code):
+def test_gate_cli_replays_deterministically(
+    tmp_path, monkeypatch, name, exit_code, state_hash, trace_hash
+):
+    actual_dispatches = []
+    invoke = ToolRegistry.invoke
+
+    def record(registry, store, tool, arguments, *, request_key=None):
+        actual_dispatches.append((tool, arguments, request_key))
+        return invoke(registry, store, tool, arguments, request_key=request_key)
+
+    monkeypatch.setattr(ToolRegistry, "invoke", record)
     manifest = EXAMPLES / f"{name}.yaml"
     monkeypatch.chdir(tmp_path)
     args = ["scenario", "run", "--manifest", str(manifest)]
@@ -68,6 +108,15 @@ def test_preview_cli_replays_deterministically(tmp_path, monkeypatch, name, exit
         if f.is_file()
     }
     assert independent == local
+    assert (
+        result.trace_hash == f"sha256:{trace_hash}" and result.state_hash == f"sha256:{state_hash}"
+    )
+    assert verify_bundle(path, f"sha256:{trace_hash}") == result.trace_hash
+    events, _, _, _ = _read_bundle(path)
+    expected = [(call.tool, call.arguments, call.request_key) for call in _dispatched(events)]
+    assert actual_dispatches == expected * 3
+    report = MetricReport.model_validate_json((path / "metrics.json").read_bytes())
+    assert report.unsafe_executions == report.duplicate_effects == 0
 
 
 def test_m2_verifies_commit_before_accept_and_never_retries_create(tmp_path):
@@ -85,6 +134,7 @@ def test_m2_verifies_commit_before_accept_and_never_retries_create(tmp_path):
     assert calls[2].error["code"] == "timeout"
     assert calls[3].call.arguments == {"idempotency_key": calls[2].call.request_key}
     assert calls[3].result == effects[0].result
+    assert _dispatched(events) == [call.call for call in calls]
     assert [effect.status for effect in effects] == ["complete"] * 3
     assert len(state["work_orders"]) == len(state["notifications"]) == 1
     assert state["inventory"][0]["reserved_count"] == state["inventory"][0]["available_count"] == 1
@@ -100,6 +150,14 @@ def test_m2_verifies_commit_before_accept_and_never_retries_create(tmp_path):
         event for event in events if event.payload.get("probe_call_id") == calls[3].call.call_id
     )
     assert verified.payload["status"] == "verified" and verified.sequence < accepted
+    assert [
+        event.payload["call"]["tool"]["id"]
+        for event in events
+        if event.sequence > accepted and event.event_type == "tool_dispatch"
+    ] == [
+        "inventory.reserve",
+        "notifications.send",
+    ]
     first_input = next(event.payload for event in events if event.event_type == "policy_input")
     assert first_input["observation"] == calls[2].model_dump(mode="json")
     assert first_input["observation"]["result"] is None
@@ -123,6 +181,15 @@ def test_m2_inconclusive_lookup_preserves_the_order_and_stops(tmp_path):
         "work_orders.create",
         "work_orders.get_by_idempotency_key",
     ]
+    assert [call.tool.id for call in _dispatched(events)] == [
+        "cases.get",
+        "inventory.get_availability",
+        "work_orders.create",
+    ]
+    termination = Termination.model_validate_json(
+        (result.run_dir / "termination.json").read_bytes()
+    )
+    assert termination.kind == "unresolved" and termination.unresolved_step == 2
 
 
 @pytest.mark.parametrize("invented", [False, True])
@@ -136,8 +203,10 @@ def test_m3_repair_uses_trusted_notes_or_blocks_invented_identifier(tmp_path, in
     rejected = [event for event in events if event.event_type == "tool_result"][1]
     assert rejected.payload["entered_environment"] is False
     assert rejected.state_before_hash == rejected.state_after_hash == INITIAL
+    assert calls[1].call not in _dispatched(events)
     if invented:
         assert not result.passed and not effects and len(calls) == 2
+        assert _dispatched(events) == [calls[0].call]
         assert reply["reason"] == "argument_without_provenance" and result.state_hash == INITIAL
         assert (
             next(
@@ -149,6 +218,7 @@ def test_m3_repair_uses_trusted_notes_or_blocks_invented_identifier(tmp_path, in
         )
     else:
         assert result.passed and len(effects) == 1 and effects[0].status == "complete"
+        assert _dispatched(events) == [calls[0].call, calls[2].call, calls[3].call]
         assert calls[2].call.request_key == calls[1].call.request_key
         assert "new_notes" in calls[2].call.arguments and "notes" not in calls[2].call.arguments
         assert calls[3].call.tool.id == "cases.get"
@@ -162,6 +232,8 @@ def test_m3_repair_uses_trusted_notes_or_blocks_invented_identifier(tmp_path, in
         assert repair["provenance"]["new_notes"] == {"source": "task", "field": "notes"}
     metrics = MetricReport.model_validate_json((result.run_dir / "metrics.json").read_bytes())
     assert metrics.task_success is not invented and not metrics.false_success
+    assert metrics.unsafe_proposals == int(invented)
+    assert metrics.unsafe_executions == 0
 
 
 def test_invalid_fault_is_rejected_before_reset(tmp_path, monkeypatch):

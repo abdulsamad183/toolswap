@@ -20,6 +20,7 @@ class ScenarioRun:
     passed: bool
     state_hash: str
     trace_hash: str
+    infrastructure_failure: bool = False
 
 
 @dataclass(frozen=True)
@@ -31,28 +32,48 @@ class TraceRecord:
     state_after_hash: str
 
 
-def build_trace(run_id: str, seed: int, records: list[TraceRecord]) -> bytes:
-    clock = LogicalClock()
-    previous_hash = None
-    rows = []
-    for sequence, record in enumerate(records):
+class TraceRecorder:
+    def __init__(self, run_id: str, seed: int):
+        self.run_id = run_id
+        self.seed = seed
+        self._clock = LogicalClock()
+        self._events: list[Event] = []
+        self._rows: list[bytes] = []
+
+    @property
+    def events(self) -> tuple[Event, ...]:
+        return tuple(self._events)
+
+    def append(self, record: TraceRecord) -> Event:
+        sequence = len(self._events)
         fields: JsonObject = {
             "schema_version": SCHEMA_VERSION,
-            "run_id": run_id,
-            "event_id": stable_id("event", seed, run_id, sequence),
+            "run_id": self.run_id,
+            "event_id": stable_id("event", self.seed, self.run_id, sequence),
             "sequence": sequence,
             "actor": record.actor,
             "event_type": record.event_type,
             "payload": record.payload,
-            "logical_time": clock.tick(),
+            "logical_time": self._clock.tick(),
             "state_before_hash": record.state_before_hash,
             "state_after_hash": record.state_after_hash,
-            "previous_event_hash": previous_hash,
+            "previous_event_hash": self._events[-1].integrity_hash if sequence else None,
         }
-        previous_hash = content_hash(canonical_json(fields))
-        event = Event.model_validate(fields | {"integrity_hash": previous_hash})
-        rows.append(canonical_json(event.model_dump(mode="json")) + b"\n")
-    return b"".join(rows)
+        digest = content_hash(canonical_json(fields))
+        event = Event.model_validate(fields | {"integrity_hash": digest})
+        self._events.append(event)
+        self._rows.append(canonical_json(event.model_dump(mode="json")) + b"\n")
+        return event
+
+    def to_bytes(self) -> bytes:
+        return b"".join(self._rows)
+
+
+def build_trace(run_id: str, seed: int, records: list[TraceRecord]) -> bytes:
+    trace = TraceRecorder(run_id, seed)
+    for record in records:
+        trace.append(record)
+    return trace.to_bytes()
 
 
 def run_directory(root: Path, artifacts_dir: str, run_id: str) -> Path:

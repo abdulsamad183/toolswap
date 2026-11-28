@@ -1,7 +1,9 @@
-"""Resolve and run the four bundled recovery previews."""
+"""Resolve and run the bundled recovery benchmark cases."""
 
 import json
+import sqlite3
 from collections.abc import Iterator
+from contextlib import suppress
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal
@@ -21,13 +23,23 @@ from toolswap.contracts import (
     VersionedRecord,
 )
 from toolswap.determinism import canonical_json, content_hash, stable_id
-from toolswap.grading import grade_outcome
 from toolswap.m1 import CASE, READ_CASE, RECIPES, STOCK
 from toolswap.recovery.controller import Controller
+from toolswap.recovery.evaluation import grade_recovery
+from toolswap.recovery.evidence import ARTIFACT_FORMAT, record_line, seal_bundle
 from toolswap.recovery.gateway import Gateway
 from toolswap.recovery.guard import scope_violation
-from toolswap.recovery.records import Fault, PolicyInput, Probe, RepairField, Scope, Step
-from toolswap.replay import ScenarioRun, build_trace, publish_artifacts, run_directory
+from toolswap.recovery.records import (
+    Fault,
+    PolicyInput,
+    Probe,
+    RepairField,
+    Scope,
+    Step,
+    Termination,
+    TerminationKind,
+)
+from toolswap.replay import ScenarioRun, publish_artifacts, run_directory
 from toolswap.service_contracts import tool_reference
 from toolswap.service_operations import build_service_registry
 from toolswap.service_tools import ToolError, ToolRegistry
@@ -321,6 +333,33 @@ def _script(script: Iterator[RecoveryDecision], _: PolicyInput) -> bytes:
     return canonical_json(decision.model_dump(mode="json"))
 
 
+def _termination(
+    controller: Controller, response: JsonObject, infrastructure_reason: str | None
+) -> Termination:
+    kind: TerminationKind
+    if infrastructure_reason is not None:
+        kind, reason = "infrastructure_failure", infrastructure_reason
+    elif controller.active_step is None:
+        kind, reason = "completed", "completed"
+    else:
+        reason = str(response["reason"])
+        match reason:
+            case "policy_stop" | "information_required" | "confirmation_required":
+                kind = reason
+            case "verification_inconclusive":
+                kind = "unresolved"
+            case _:
+                kind = "budget_exhausted" if reason.endswith("budget_exhausted") else "blocked"
+    return Termination(
+        kind=kind,
+        reason=reason,
+        unresolved_step=controller.active_step,
+        tool=controller.active_tool,
+        last_evidence_event_id=controller.records[-1].event_id,
+        state_hash=controller.state_hash,
+    )
+
+
 def run_recovery(manifest: ResolvedRunManifest, root: Path, fixtures: Path) -> ScenarioRun:
     preview = PREVIEWS.get(manifest.scenario)
     if preview is None or manifest.policy != POLICY:
@@ -337,12 +376,14 @@ def run_recovery(manifest: ResolvedRunManifest, root: Path, fixtures: Path) -> S
     run_id = stable_id(
         "run",
         manifest.seed,
+        ARTIFACT_FORMAT,
         manifest.model_dump(mode="json", exclude={"artifacts_dir"}),
         scenario.model_dump(mode="json"),
         preview.model_dump(mode="json"),
         [registry.contract(ref).model_dump(mode="json") for ref in scenario.allowed_tools],
     )
     directory = run_directory(root, manifest.artifacts_dir, run_id)
+    config = record_line(manifest)
     with TemporaryDirectory() as scratch:
         store = StateStore.reset(
             Path(scratch) / "state.sqlite3", scenario, snapshot, seed=manifest.seed
@@ -356,28 +397,74 @@ def run_recovery(manifest: ResolvedRunManifest, root: Path, fixtures: Path) -> S
             lambda request: _script(script, request),
             preview.faults,
         )
-        response = controller.run(preview.steps, preview.claims)
+        infrastructure_reason = None
+        try:
+            response = controller.run(
+                preview.steps, preview.claims, manifest_hash=content_hash(config)
+            )
+            effects = store.effects()
+        except Exception as exc:
+            if not controller.records:
+                raise
+            with suppress(OSError, sqlite3.Error, ValueError):
+                controller.recover_interrupted_effect()
+            effects = tuple(controller.effects.values())
+            if isinstance(exc, sqlite3.Error):
+                infrastructure_reason = "sqlite_failure"
+            elif isinstance(exc, OSError):
+                infrastructure_reason = "environment_failure"
+            else:
+                infrastructure_reason = "runtime_failure"
+            response = {
+                "schema_version": SCHEMA_VERSION,
+                "status": "incomplete",
+                "reason": infrastructure_reason,
+                "unresolved_step": controller.active_step,
+                "tool": controller.active_tool.model_dump(mode="json")
+                if controller.active_tool
+                else None,
+            }
+        termination = _termination(controller, response, infrastructure_reason)
         controller.emit("controller", "final_response", response)
-        final_hash = store.current_state().state_hash
-        final = decode_snapshot(store.resolve_snapshot(final_hash))
+        final_hash = termination.state_hash
+        final = decode_snapshot(controller.snapshots[final_hash])
         state: JsonObject = final.model_dump(mode="json")
         state["row_counts"] = {table: len(rows) for table, rows in final.tables.items()}
-        metrics = grade_outcome(run_id, scenario.assertions, state, response)
+        metrics = grade_recovery(
+            run_id,
+            scenario,
+            state,
+            response,
+            termination,
+            controller.records,
+            effects,
+            len(preview.steps),
+        )
         controller.emit("evaluator", "graded", metrics.model_dump(mode="json"))
-        trace = build_trace(run_id, manifest.seed, controller.records)
+        controller.emit("controller", "terminated", termination.model_dump(mode="json"))
+        trace = controller.trace.to_bytes()
         state_ref = StateReference(schema_version=SCHEMA_VERSION, state_hash=final_hash)
         artifacts = {
-            "resolved_config.json": canonical_json(manifest.model_dump(mode="json")) + b"\n",
+            "resolved_config.json": config,
             "trace.jsonl": trace,
-            "metrics.json": canonical_json(metrics.model_dump(mode="json")) + b"\n",
-            "state_refs.json": canonical_json(state_ref.model_dump(mode="json")) + b"\n",
+            "metrics.json": record_line(metrics),
+            "state_refs.json": record_line(state_ref),
             "response.json": canonical_json(response) + b"\n",
-            "effects.jsonl": b"".join(
-                canonical_json(effect.model_dump(mode="json")) + b"\n" for effect in store.effects()
-            ),
+            "effects.jsonl": b"".join(record_line(effect) for effect in effects),
+            "termination.json": record_line(termination),
         }
-        for state_hash in dict.fromkeys(record.state_after_hash for record in controller.records):
-            name, payload = store.snapshot_artifact(state_hash)
-            artifacts[name] = payload
+        for state_hash, payload in controller.snapshots.items():
+            artifacts[f"states/{state_hash.removeprefix('sha256:')}.json"] = payload
+        artifacts["integrity.json"] = seal_bundle(controller.records, artifacts)
+    trace_hash = content_hash(trace)
+    if infrastructure_reason is not None:
+        suffix = trace_hash.removeprefix("sha256:")
+        directory = directory.with_name(f"{directory.name}-infrastructure-{suffix}")
     publish_artifacts(directory, artifacts)
-    return ScenarioRun(directory, metrics.safety_adjusted_success, final_hash, content_hash(trace))
+    return ScenarioRun(
+        directory,
+        metrics.safety_adjusted_success,
+        final_hash,
+        trace_hash,
+        termination.kind == "infrastructure_failure",
+    )
