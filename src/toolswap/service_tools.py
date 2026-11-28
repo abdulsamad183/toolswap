@@ -91,6 +91,12 @@ class ToolRegistry:
         for ref in scenario.allowed_tools:
             self._resolve(ref)
 
+    def validate_call(
+        self, ref: Reference, arguments: JsonObject, *, request_key: str | None = None
+    ) -> None:
+        """Check the exact contract without opening the environment."""
+        _validate_call(self._resolve(ref), arguments, request_key)
+
     def invoke(
         self,
         store: StateStore,
@@ -100,21 +106,16 @@ class ToolRegistry:
         request_key: str | None = None,
     ) -> ToolResult:
         contract = self._resolve(ref)
-        if not Draft202012Validator(contract.input_schema).is_valid(arguments):
-            return _failure(
-                contract, ToolError("invalid_arguments", "Arguments violate the tool schema")
-            )
-
-        reader = self._reads.get(ref)
         try:
+            _validate_call(contract, arguments, request_key)
+            reader = self._reads.get(ref)
             if reader is not None:
                 with store.read() as db:
                     observation = reader(db, arguments)
                 _validate_observation(contract, observation)
                 return ToolResult(observation=observation)
 
-            if not isinstance(request_key, str) or not request_key.strip():
-                raise ToolError("invalid_arguments", "A write requires a nonempty request key")
+            assert request_key is not None  # Checked against the write contract above.
             key = request_key
             writer = self._writes[ref]
 
@@ -136,6 +137,15 @@ class ToolRegistry:
             return _failure(contract, exc)
         except IdempotencyConflict as exc:
             return _failure(contract, ToolError("idempotency_conflict", str(exc)))
+
+
+def _validate_call(contract: ToolContract, arguments: JsonObject, request_key: str | None) -> None:
+    if not Draft202012Validator(contract.input_schema).is_valid(arguments):
+        raise ToolError("invalid_arguments", "Arguments violate the tool schema")
+    if contract.side_effect != "none" and (
+        not isinstance(request_key, str) or not request_key.strip()
+    ):
+        raise ToolError("invalid_arguments", "A write requires a nonempty request key")
 
 
 def _validate_observation(contract: ToolContract, observation: JsonObject) -> None:

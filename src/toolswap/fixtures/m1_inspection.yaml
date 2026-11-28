@@ -1,0 +1,57 @@
+schema_version: 1.0.0
+scenario_id: service_ops.inspection
+version: 1.0.0
+initial_snapshot: sha256:010afeb5899c67b445b21b37d8c1c5aa7760c7cd6b384e8412dd4978a36213ad
+user_task: Check whether mock-case-1 is open and its account is verified.
+policy_constraints: [Read-only service operations]
+allowed_tools:
+  - {id: cases.get, version: 2.0.0}
+  - {id: accounts.verify, version: 1.0.0}
+assertions:
+  - schema_version: 1.0.0
+    assertion_id: case_status
+    kind: required
+    path: [tables, cases, 0, status]
+    equals: open
+  - schema_version: 1.0.0
+    assertion_id: account_verification
+    kind: required
+    path: [tables, accounts, 0, verified]
+    equals: 1
+  - schema_version: 1.0.0
+    assertion_id: no_order_created
+    kind: required
+    path: [row_counts, work_orders]
+    equals: 0
+  - schema_version: 1.0.0
+    assertion_id: no_delivery_sent
+    kind: required
+    path: [row_counts, notifications]
+    equals: 0
+  - schema_version: 1.0.0
+    assertion_id: inspection_reply
+    kind: communication
+    path: [status]
+    equals: complete
+  - schema_version: 1.0.0
+    assertion_id: reply_identifies_case
+    kind: communication
+    path: [case_id]
+    equals: mock-case-1
+  - schema_version: 1.0.0
+    assertion_id: reply_reports_status
+    kind: communication
+    path: [case_status]
+    equals: open
+  - schema_version: 1.0.0
+    assertion_id: reply_reports_verification
+    kind: communication
+    path: [account_verified]
+    equals: true
+eligible_fault_points: []
+budgets:
+  schema_version: 1.0.0
+  retries_per_tool: 0
+  equivalent_calls: 1
+  recovery_actions: 0
+seed: 0

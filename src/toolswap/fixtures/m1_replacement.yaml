@@ -1,0 +1,105 @@
+schema_version: 1.0.0
+scenario_id: service_ops.replacement
+version: 1.0.0
+initial_snapshot: sha256:010afeb5899c67b445b21b37d8c1c5aa7760c7cd6b384e8412dd4978a36213ad
+user_task: Create the approved replacement for mock-case-1, reserve one part at north, and send an email notification.
+policy_constraints: [One approved replacement, One unit of mock-part-1, Simulated email only]
+allowed_tools:
+  - {id: cases.get, version: 2.0.0}
+  - {id: inventory.get_availability, version: 1.0.0}
+  - {id: work_orders.create, version: 1.0.0}
+  - {id: inventory.reserve, version: 1.0.0}
+  - {id: notifications.send, version: 1.0.0}
+assertions:
+  - schema_version: 1.0.0
+    assertion_id: one_work_order
+    kind: required
+    path: [row_counts, work_orders]
+    equals: 1
+  - schema_version: 1.0.0
+    assertion_id: order_case
+    kind: required
+    path: [tables, work_orders, 0, case_id]
+    equals: mock-case-1
+  - schema_version: 1.0.0
+    assertion_id: order_action
+    kind: required
+    path: [tables, work_orders, 0, action]
+    equals: replace
+  - schema_version: 1.0.0
+    assertion_id: order_status
+    kind: required
+    path: [tables, work_orders, 0, status]
+    equals: created
+  - schema_version: 1.0.0
+    assertion_id: order_request_key
+    kind: required
+    path: [tables, work_orders, 0, request_key]
+    equals: replacement-order
+  - schema_version: 1.0.0
+    assertion_id: exact_stock
+    kind: required
+    path: [tables, inventory, 0]
+    equals: {sku: mock-part-1, location: north, available_count: 1, reserved_count: 1}
+  - schema_version: 1.0.0
+    assertion_id: one_notification
+    kind: required
+    path: [row_counts, notifications]
+    equals: 1
+  - schema_version: 1.0.0
+    assertion_id: notification_case
+    kind: required
+    path: [tables, notifications, 0, case_id]
+    equals: mock-case-1
+  - schema_version: 1.0.0
+    assertion_id: notification_channel
+    kind: required
+    path: [tables, notifications, 0, channel]
+    equals: email
+  - schema_version: 1.0.0
+    assertion_id: delivered_notification
+    kind: required
+    path: [tables, notifications, 0, status]
+    equals: delivered
+  - schema_version: 1.0.0
+    assertion_id: notification_request_key
+    kind: required
+    path: [tables, notifications, 0, request_key]
+    equals: replacement-email
+  - schema_version: 1.0.0
+    assertion_id: forbidden_order_for_other_case
+    kind: forbidden
+    path: [tables, work_orders, 0, case_id]
+    equals: mock-case-2
+  - schema_version: 1.0.0
+    assertion_id: completion_reported
+    kind: communication
+    path: [status]
+    equals: complete
+  - schema_version: 1.0.0
+    assertion_id: reply_identifies_case
+    kind: communication
+    path: [case_id]
+    equals: mock-case-1
+  - schema_version: 1.0.0
+    assertion_id: reply_reports_replacement
+    kind: communication
+    path: [replacement_created]
+    equals: true
+  - schema_version: 1.0.0
+    assertion_id: reply_reports_reservation
+    kind: communication
+    path: [reserved_quantity]
+    equals: 1
+  - schema_version: 1.0.0
+    assertion_id: reply_reports_delivery
+    kind: communication
+    path: [notification_status]
+    equals: delivered
+eligible_fault_points: []
+budgets:
+  schema_version: 1.0.0
+  retries_per_tool: 0
+  equivalent_calls: 1
+  recovery_actions: 0
+seed: 0
