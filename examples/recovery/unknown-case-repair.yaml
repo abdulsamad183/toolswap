@@ -1,0 +1,4 @@
+schema_version: 1.0.0
+scenario: {id: service_ops.unknown_case_repair, version: 1.0.0}
+policy: scripted_recovery
+seed: 0

@@ -8,7 +8,12 @@ from pydantic import JsonValue
 
 from toolswap.contracts import JsonObject
 from toolswap.determinism import stable_id
-from toolswap.service_contracts import MAX_SQLITE_INTEGER, service_contracts, tool_reference
+from toolswap.service_contracts import (
+    MAX_SQLITE_INTEGER,
+    revised_case_update,
+    service_contracts,
+    tool_reference,
+)
 from toolswap.service_tools import ToolError, ToolRegistry
 from toolswap.state import StateIntegrityError, persisted_seed
 
@@ -72,6 +77,18 @@ def _update_case(db: sqlite3.Connection, args: JsonObject, key: str) -> JsonObje
     db.execute("UPDATE cases SET notes = ? WHERE case_id = ?", (args["notes"], args["case_id"]))
     return _check_write(
         _get_case_details(db, args), case | {"notes": args["notes"]}, "cases.update"
+    )
+
+
+def _update_case_revised(db: sqlite3.Connection, args: JsonObject, key: str) -> JsonObject:
+    return _update_case(
+        db,
+        {
+            "case_id": args["case_id"],
+            "expected_notes": args["expected_notes"],
+            "notes": args["new_notes"],
+        },
+        key,
     )
 
 
@@ -225,9 +242,25 @@ def _send_notification(db: sqlite3.Connection, args: JsonObject, key: str) -> Js
     )
 
 
-def build_service_registry(fixtures: Path = FIXTURES) -> ToolRegistry:
+def build_service_registry(
+    fixtures: Path = FIXTURES, *, include_revised_case: bool = False
+) -> ToolRegistry:
+    contracts = service_contracts(fixtures)
+    writes = {
+        tool_reference("cases.update"): _update_case,
+        tool_reference("cases.close"): _close_case,
+        tool_reference("inventory.reserve"): _reserve_stock,
+        tool_reference("inventory.release"): _release_stock,
+        tool_reference("work_orders.create"): _create_work_order,
+        tool_reference("work_orders.cancel"): _cancel_work_order,
+        tool_reference("notifications.send"): _send_notification,
+    }
+    if include_revised_case:
+        current = next(contract for contract in contracts if contract.tool_id == "cases.update")
+        contracts += (revised_case_update(current),)
+        writes[tool_reference("cases.update", "2.0.0")] = _update_case_revised
     return ToolRegistry(
-        service_contracts(fixtures),
+        contracts,
         reads={
             tool_reference("accounts.get"): _get_account,
             tool_reference("accounts.verify"): _verify_account,
@@ -239,13 +272,5 @@ def build_service_registry(fixtures: Path = FIXTURES) -> ToolRegistry:
             tool_reference("work_orders.get_by_idempotency_key"): _get_work_order_by_key,
             tool_reference("notifications.get_delivery_status"): _get_delivery_status,
         },
-        writes={
-            tool_reference("cases.update"): _update_case,
-            tool_reference("cases.close"): _close_case,
-            tool_reference("inventory.reserve"): _reserve_stock,
-            tool_reference("inventory.release"): _release_stock,
-            tool_reference("work_orders.create"): _create_work_order,
-            tool_reference("work_orders.cancel"): _cancel_work_order,
-            tool_reference("notifications.send"): _send_notification,
-        },
+        writes=writes,
     )

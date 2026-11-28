@@ -28,3 +28,5 @@ See the [SQLite state safety checks](docs/state-safety.md) for the mock state st
 See the [SQLite service tool checks](docs/service-tools.md) for replacement order, stock, and delivery verification.
 
 See the [M1 demonstration](docs/m1.md) to run both clean SQLite scenarios and inspect their replay and grading evidence.
+
+See the [recovery previews](docs/recovery.md) to reproduce a lost write response, a safe stop, and schema repair.

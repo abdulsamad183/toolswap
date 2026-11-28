@@ -21,6 +21,8 @@ from toolswap.contracts import (
 from toolswap.determinism import canonical_json, content_hash, stable_id
 from toolswap.grading import evaluate_assertion
 from toolswap.m1 import run_clean_scenario
+from toolswap.recovery.scenarios import POLICY as RECOVERY_POLICY
+from toolswap.recovery.scenarios import run_recovery
 from toolswap.replay import (
     ArtifactError,
     ScenarioRun,
@@ -73,6 +75,8 @@ def run_scenario(path: Path, root: Path) -> ScenarioRun:
     manifest = resolve_config(path, root)
     if manifest.scenario == CASE_READ:
         return _run_feasibility(manifest, root)
+    if manifest.policy == RECOVERY_POLICY:
+        return run_recovery(manifest, root, FIXTURES)
     return run_clean_scenario(manifest, root, FIXTURES)
 
 
