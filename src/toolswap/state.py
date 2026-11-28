@@ -113,6 +113,17 @@ def _registered(db: sqlite3.Connection, key: str) -> sqlite3.Row | None:
     return row
 
 
+def _run_state(db: sqlite3.Connection) -> sqlite3.Row:
+    row: sqlite3.Row | None = db.execute("SELECT * FROM run_state WHERE singleton = 1").fetchone()
+    if row is None:
+        raise StateIntegrityError("database is missing its initial run state")
+    return row
+
+
+def persisted_seed(db: sqlite3.Connection) -> int:
+    return int(_run_state(db)["seed"])
+
+
 def _append_effect(
     db: sqlite3.Connection,
     tool: Reference,
@@ -123,9 +134,7 @@ def _append_effect(
     *,
     duplicate: bool,
 ) -> EffectRecord:
-    state = db.execute("SELECT * FROM run_state WHERE singleton = 1").fetchone()
-    if state is None:
-        raise StateIntegrityError("database is missing its initial run state")
+    state = _run_state(db)
     sequence = db.execute("SELECT COALESCE(MAX(sequence), 0) + 1 FROM effect_ledger").fetchone()[0]
     record = EffectRecord(
         schema_version=SCHEMA_VERSION,
@@ -204,8 +213,14 @@ class StateStore:
                 raise StateIntegrityError("unsupported SQLite schema version")
             yield db
 
-    def current_state(self) -> StateReference:
+    @contextmanager
+    def read(self) -> Iterator[sqlite3.Connection]:
+        """Give trusted queries a consistent SQLite view on a read-only connection."""
         with self._open() as db, _transaction(db, "BEGIN"):
+            yield db
+
+    def current_state(self) -> StateReference:
+        with self.read() as db:
             return StateReference(
                 schema_version=SCHEMA_VERSION, state_hash=content_hash(capture(db))
             )
@@ -220,7 +235,7 @@ class StateStore:
         return f"states/{state_hash.removeprefix('sha256:')}.json", payload
 
     def state_diff(self, before_hash: str, after_hash: str) -> list[JsonObject]:
-        with self._open() as db, _transaction(db, "BEGIN"):
+        with self.read() as db:
             before = decode_snapshot(_resolve_snapshot(db, before_hash))
             after = decode_snapshot(_resolve_snapshot(db, after_hash))
             return diff_snapshots(before, after)

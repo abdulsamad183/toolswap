@@ -25,6 +25,7 @@ from toolswap.contracts import (
     ToolContract,
 )
 from toolswap.determinism import LogicalClock, canonical_json, content_hash, stable_id
+from toolswap.service_operations import build_service_registry
 from toolswap.trust import parse_proposal
 
 FIXTURES = Path(__file__).with_name("fixtures")
@@ -161,7 +162,9 @@ def run_scenario(path: Path, root: Path) -> ScenarioRun:
     if manifest.scenario != CASE_READ or manifest.policy != "stub":
         raise InputError("feasibility requires service_ops.case_read@1.0.0 with stub policy")
     scenario = parse_yaml_record(FIXTURES / "case_read.yaml", Scenario)
-    contract = parse_yaml_record(FIXTURES / "cases_get.yaml", ToolContract)
+    registry = build_service_registry(FIXTURES)
+    registry.audit_scenario(scenario)
+    contract = registry.contract(CASES_GET)
     if (
         (scenario.scenario_id, scenario.version) != (CASE_READ.id, CASE_READ.version)
         or scenario.allowed_tools != (CASES_GET,)
